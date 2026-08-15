@@ -118,6 +118,15 @@ type fakeProjectTeardowner struct {
 	err      error
 }
 
+type failingListStore struct {
+	project.Store
+	err error
+}
+
+func (s failingListStore) ListProjects(context.Context) ([]domain.ProjectRecord, error) {
+	return nil, s.err
+}
+
 type captureSink struct {
 	events []ports.TelemetryEvent
 }
@@ -178,6 +187,23 @@ func TestManager_AddListGetRemove(t *testing.T) {
 
 	_, err = m.Remove(ctx, "ao")
 	wantCode(t, err, "PROJECT_NOT_FOUND")
+}
+
+func TestManager_ListPreservesStorageCauseBehindInternalError(t *testing.T) {
+	storageErr := errors.New("sqlite: attempt to write a readonly database")
+	m := project.New(failingListStore{err: storageErr})
+
+	_, err := m.List(context.Background())
+	if !errors.Is(err, storageErr) {
+		t.Fatalf("List err = %v, want wrapped storage cause", err)
+	}
+	var apiError *apierr.Error
+	if !errors.As(err, &apiError) {
+		t.Fatalf("List err = %v, want wrapped *apierr.Error", err)
+	}
+	if apiError.Code != "PROJECTS_LIST_FAILED" || apiError.Message != "Failed to load projects" {
+		t.Fatalf("api error = %#v, want redacted PROJECTS_LIST_FAILED", apiError)
+	}
 }
 
 func TestManager_AddEmitsProjectAndFirstProjectTelemetry(t *testing.T) {
