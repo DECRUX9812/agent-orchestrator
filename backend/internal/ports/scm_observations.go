@@ -127,6 +127,10 @@ type SCMPRObservation struct {
 	URL string
 	// Number is the provider's PR number in the repository.
 	Number int
+	// BaseRepo is the provider's canonical full name for the repository that
+	// owns the PR number. It can differ from the repository used for the list
+	// request when a provider redirects a renamed or transferred repository.
+	BaseRepo string
 	// State is AO's normalized PR state: draft, open, merged, or closed.
 	State string
 	// Draft is true when the PR is marked draft/work-in-progress.
