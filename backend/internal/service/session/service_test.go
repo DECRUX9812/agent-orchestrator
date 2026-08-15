@@ -2111,6 +2111,7 @@ func TestToAPIErrorMapsWorkspaceBranchSentinels(t *testing.T) {
 		{"chat driver unavailable", fmt.Errorf("spawn: %w", ports.ErrChatDriverUnavailable), apierr.KindConflict, "CHAT_DRIVER_UNAVAILABLE"},
 		{"chat driver incompatible", fmt.Errorf("spawn: %w", ports.ErrChatDriverIncompatible), apierr.KindConflict, "CHAT_DRIVER_INCOMPATIBLE"},
 		{"chat auth required", fmt.Errorf("spawn: %w", ports.ErrChatAuthRequired), apierr.KindConflict, "CHAT_AUTH_REQUIRED"},
+		{"workspace provision failed", fmt.Errorf("spawn mer-1: provision: %w: postCreate: exit status 1", sessionmanager.ErrWorkspaceProvisionFailed), apierr.KindInvalid, "WORKSPACE_PROVISION_FAILED"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2140,6 +2141,25 @@ func TestToAPIErrorSwitchDeliveryUnconfirmedMessage(t *testing.T) {
 	const wantMessage = "The target agent started, but AO could not confirm that it accepted the continuation"
 	if apiError.Message != wantMessage {
 		t.Fatalf("message = %q, want %q", apiError.Message, wantMessage)
+	}
+}
+
+func TestToAPIErrorWorkspaceProvisionFailedIsActionableWithoutLeakingOutput(t *testing.T) {
+	err := fmt.Errorf("spawn mer-1: provision: %w: postCreate: secret command output", sessionmanager.ErrWorkspaceProvisionFailed)
+	mapped := toAPIError(err)
+
+	var apiError *apierr.Error
+	if !errors.As(mapped, &apiError) {
+		t.Fatalf("mapped = %v, want *apierr.Error", mapped)
+	}
+	if apiError.Code != "WORKSPACE_PROVISION_FAILED" {
+		t.Fatalf("code = %q, want WORKSPACE_PROVISION_FAILED", apiError.Code)
+	}
+	if !strings.Contains(apiError.Message, "symlinks and postCreate commands") {
+		t.Fatalf("message = %q, want project setup remedy", apiError.Message)
+	}
+	if strings.Contains(apiError.Message, "secret command output") {
+		t.Fatalf("message leaked command output: %q", apiError.Message)
 	}
 }
 
